@@ -4,6 +4,16 @@ import os
 
 app = Flask(__name__)
 
+COOKIES_PATH = "/tmp/cookies.txt"
+
+# Render's free tier has no persistent disk, so cookies are passed in as an
+# environment variable (the raw Netscape-format cookies.txt content) and
+# written to a temp file once at startup.
+_raw_cookies = os.environ.get("YTDLP_COOKIES")
+if _raw_cookies:
+    with open(COOKIES_PATH, "w", encoding="utf-8") as f:
+        f.write(_raw_cookies)
+
 YDL_OPTS = {
     "format": "best[ext=mp4]/best",
     "quiet": True,
@@ -11,6 +21,8 @@ YDL_OPTS = {
     "noplaylist": True,
     "skip_download": True,
 }
+if _raw_cookies:
+    YDL_OPTS["cookiefile"] = COOKIES_PATH
 
 
 @app.route("/", methods=["GET"])
