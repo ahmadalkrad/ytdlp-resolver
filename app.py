@@ -93,7 +93,38 @@ def resolve():
                 "duration": info.get("duration"),
             })
     except yt_dlp.utils.DownloadError as e:
-        return jsonify({"status": "error", "message": str(e)}), 422
+        error_message = str(e)
+
+        # If it failed specifically on format selection, re-query with no
+        # format restriction so we can see what YouTube actually offered —
+        # this tells us whether a progressive (single-file) stream exists
+        # at all for this video, without needing another deploy cycle.
+        if "Requested format is not available" in error_message:
+            try:
+                diag_opts = dict(YDL_OPTS)
+                diag_opts.pop("format", None)
+                with yt_dlp.YoutubeDL(diag_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    formats = [
+                        {
+                            "format_id": f.get("format_id"),
+                            "ext": f.get("ext"),
+                            "resolution": f.get("resolution"),
+                            "vcodec": f.get("vcodec"),
+                            "acodec": f.get("acodec"),
+                            "has_url": bool(f.get("url")),
+                        }
+                        for f in info.get("formats", [])
+                    ]
+                    return jsonify({
+                        "status": "error",
+                        "message": error_message,
+                        "available_formats": formats,
+                    }), 422
+            except Exception:
+                pass  # fall through to the plain error below
+
+        return jsonify({"status": "error", "message": error_message}), 422
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
