@@ -20,6 +20,13 @@ YDL_OPTS = {
     "no_warnings": True,
     "noplaylist": True,
     "skip_download": True,
+    # If YouTube's "web" client breaks (as with the ongoing SABR rollout),
+    # fall back to other clients rather than failing outright.
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android", "ios", "web"],
+        }
+    },
 }
 if _raw_cookies:
     YDL_OPTS["cookiefile"] = COOKIES_PATH
