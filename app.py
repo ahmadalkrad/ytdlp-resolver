@@ -4,15 +4,22 @@ import os
 
 app = Flask(__name__)
 
-COOKIES_PATH = "/tmp/cookies.txt"
+SECRET_FILE_PATH = "/etc/secrets/cookies.txt"
+FALLBACK_COOKIES_PATH = "/tmp/cookies.txt"
 
-# Render's free tier has no persistent disk, so cookies are passed in as an
-# environment variable (the raw Netscape-format cookies.txt content) and
-# written to a temp file once at startup.
-_raw_cookies = os.environ.get("YTDLP_COOKIES")
-if _raw_cookies:
-    with open(COOKIES_PATH, "w", encoding="utf-8") as f:
-        f.write(_raw_cookies)
+# Preferred: Render "Secret Files" — these preserve multi-line content correctly,
+# unlike the plain environment variable UI, which can mangle/flatten newlines
+# when pasted. Falls back to the YTDLP_COOKIES env var for other hosts/local dev.
+if os.path.exists(SECRET_FILE_PATH):
+    _cookies_file = SECRET_FILE_PATH
+else:
+    _raw_cookies = os.environ.get("YTDLP_COOKIES")
+    if _raw_cookies:
+        with open(FALLBACK_COOKIES_PATH, "w", encoding="utf-8") as f:
+            f.write(_raw_cookies)
+        _cookies_file = FALLBACK_COOKIES_PATH
+    else:
+        _cookies_file = None
 
 YDL_OPTS = {
     "format": "best[ext=mp4]/best",
@@ -28,13 +35,17 @@ YDL_OPTS = {
         }
     },
 }
-if _raw_cookies:
-    YDL_OPTS["cookiefile"] = COOKIES_PATH
+if _cookies_file:
+    YDL_OPTS["cookiefile"] = _cookies_file
 
 
 @app.route("/", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "ytdlp-resolver"})
+    return jsonify({
+        "status": "ok",
+        "service": "ytdlp-resolver",
+        "cookies_loaded": _cookies_file is not None,
+    })
 
 
 @app.route("/resolve", methods=["POST"])
