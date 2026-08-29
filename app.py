@@ -10,8 +10,17 @@ FALLBACK_COOKIES_PATH = "/tmp/cookies.txt"
 # Preferred: Render "Secret Files" — these preserve multi-line content correctly,
 # unlike the plain environment variable UI, which can mangle/flatten newlines
 # when pasted. Falls back to the YTDLP_COOKIES env var for other hosts/local dev.
+#
+# Note: yt-dlp writes back to the cookiejar file (to persist any session
+# cookies YouTube rotates mid-request), so it needs a *writable* path.
+# Render's Secret Files are mounted read-only, so we copy the contents into
+# /tmp first rather than pointing yt-dlp at /etc/secrets directly.
 if os.path.exists(SECRET_FILE_PATH):
-    _cookies_file = SECRET_FILE_PATH
+    with open(SECRET_FILE_PATH, "r", encoding="utf-8") as src:
+        _cookie_contents = src.read()
+    with open(FALLBACK_COOKIES_PATH, "w", encoding="utf-8") as dst:
+        dst.write(_cookie_contents)
+    _cookies_file = FALLBACK_COOKIES_PATH
 else:
     _raw_cookies = os.environ.get("YTDLP_COOKIES")
     if _raw_cookies:
