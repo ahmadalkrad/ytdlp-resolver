@@ -121,8 +121,12 @@ def resolve():
                         "message": error_message,
                         "available_formats": formats,
                     }), 422
-            except Exception:
-                pass  # fall through to the plain error below
+            except Exception as diag_e:
+                return jsonify({
+                    "status": "error",
+                    "message": error_message,
+                    "diagnostic_query_also_failed": str(diag_e),
+                }), 422
 
         return jsonify({"status": "error", "message": error_message}), 422
     except Exception as e:
