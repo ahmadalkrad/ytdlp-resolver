@@ -31,7 +31,12 @@ else:
         _cookies_file = None
 
 YDL_OPTS = {
-    "format": "best[ext=mp4]/best",
+    # Only pick formats that already have both video and audio in one file
+    # (a "progressive" stream). Modern YouTube mostly serves separate
+    # video-only/audio-only adaptive streams above ~360-720p, which would
+    # need a local ffmpeg merge — this trades max resolution for always
+    # getting back one ready-to-use direct URL.
+    "format": "best[ext=mp4][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]/best",
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
