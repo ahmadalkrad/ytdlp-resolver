@@ -12,4 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 
 # Render injects $PORT; gunicorn binds to it at container start.
-CMD gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 2 app:app
+# Timeout bumped up since /download now does real work (download + ffmpeg
+# merge) rather than just resolving a link — some videos will take a while.
+CMD gunicorn --bind 0.0.0.0:$PORT --timeout 300 --workers 1 app:app
