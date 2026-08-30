@@ -1,6 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file, after_this_request
 import yt_dlp
 import os
+import tempfile
+import shutil
 
 app = Flask(__name__)
 
@@ -130,6 +132,72 @@ def resolve():
 
         return jsonify({"status": "error", "message": error_message}), 422
     except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/download", methods=["POST"])
+def download():
+    data = request.get_json(silent=True) or {}
+    url = data.get("url")
+
+    if not url:
+        return jsonify({"status": "error", "message": "url is required"}), 400
+
+    work_dir = tempfile.mkdtemp(prefix="ytdl_")
+    output_template = os.path.join(work_dir, "%(id)s.%(ext)s")
+
+    download_opts = {
+        # Cap at 720p: keeps the merged file well under Telegram's 50MB
+        # bot-upload limit for most videos, and keeps download+merge time
+        # reasonable on Render's free tier. Falls back to whatever's best
+        # if no <=720p option exists.
+        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best",
+        "merge_output_format": "mp4",
+        "outtmpl": output_template,
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "extractor_args": {
+            "youtube": {"player_client": ["android", "ios", "web"]}
+        },
+    }
+    if _cookies_file:
+        download_opts["cookiefile"] = _cookies_file
+
+    try:
+        with yt_dlp.YoutubeDL(download_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            # merge_output_format can change the extension after post-processing
+            if not os.path.exists(filename):
+                base, _ = os.path.splitext(filename)
+                candidate = base + ".mp4"
+                if os.path.exists(candidate):
+                    filename = candidate
+
+        if not os.path.exists(filename):
+            shutil.rmtree(work_dir, ignore_errors=True)
+            return jsonify({
+                "status": "error",
+                "message": "download completed but output file was not found"
+            }), 500
+
+        @after_this_request
+        def cleanup(response):
+            shutil.rmtree(work_dir, ignore_errors=True)
+            return response
+
+        return send_file(
+            filename,
+            mimetype="video/mp4",
+            as_attachment=True,
+            download_name=f"{info.get('id', 'video')}.mp4",
+        )
+    except yt_dlp.utils.DownloadError as e:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return jsonify({"status": "error", "message": str(e)}), 422
+    except Exception as e:
+        shutil.rmtree(work_dir, ignore_errors=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
